@@ -1,6 +1,7 @@
 extends Node
 
-enum MOVEMENT_TYPE { MOVE_AND_ROTATE, MOVE_AND_STRAFE }
+enum MOVEMENT_TYPE { MOVE_AND_ROTATE, MOVE_AND_STRAFE}
+enum MOVEMENT_BASE {CAMERA, CONTROLLER}
 
 # Is this active?
 export var enabled = true setget set_enabled, get_enabled
@@ -42,6 +43,7 @@ enum Buttons {
 
 # fly mode and strafe movement management
 export (MOVEMENT_TYPE) var move_type = MOVEMENT_TYPE.MOVE_AND_ROTATE
+export (MOVEMENT_BASE) var move_base = MOVEMENT_BASE.CAMERA
 export var canFly = true
 export (Buttons) var fly_move_button_id = Buttons.VR_TRIGGER
 export (Buttons) var fly_activate_button_id = Buttons.VR_GRIP
@@ -145,7 +147,8 @@ func _physics_process(delta):
 	if controller.get_is_active():
 		var left_right = controller.get_joystick_axis(0)
 		var forwards_backwards = controller.get_joystick_axis(1)
-
+		var curr_transform = $KinematicBody.global_transform
+		var camera_transform = camera_node.global_transform
 		# if fly_action_button_id is pressed it activates the FLY MODE
 		# if fly_action_button_id is released it deactivates the FLY MODE
 		if controller.is_button_pressed(fly_activate_button_id) && canFly:
@@ -157,8 +160,12 @@ func _physics_process(delta):
 		if isflying:
 			if controller.is_button_pressed(fly_move_button_id):
 				# is flying, so we will use the controller's transform to move the VR capsule follow its orientation
-				var curr_transform = $KinematicBody.global_transform
-				velocity = -controller.global_transform.basis.z.normalized() * max_speed * ARVRServer.world_scale
+				var dir:Vector3 = Vector3()
+				if move_base == MOVEMENT_BASE.CAMERA:
+					dir = camera_transform.basis.z
+				else:
+					dir = -controller.global_transform.basis.z
+				velocity = dir.normalized() * max_speed * ARVRServer.world_scale
 				velocity = $KinematicBody.move_and_slide(velocity)
 				var movement = ($KinematicBody.global_transform.origin - curr_transform.origin)
 				origin_node.global_transform.origin += movement
@@ -222,8 +229,6 @@ func _physics_process(delta):
 			# now we do our movement
 			# We start with placing our KinematicBody in the right place
 			# by centering it on the camera but placing it on the ground
-			var curr_transform = $KinematicBody.global_transform
-			var camera_transform = camera_node.global_transform
 			curr_transform.origin = camera_transform.origin
 			curr_transform.origin.y = origin_node.global_transform.origin.y
 
@@ -244,7 +249,11 @@ func _physics_process(delta):
 
 			if move_type == MOVEMENT_TYPE.MOVE_AND_ROTATE:
 				if (abs(forwards_backwards) > 0.1 and tail.is_colliding()):
-					var dir = camera_transform.basis.z
+					var dir:Vector3 = Vector3()
+					if move_base == MOVEMENT_BASE.CAMERA:
+						dir = camera_transform.basis.z
+					else:
+						dir = -controller.global_transform.basis.z
 					dir.y = 0.0
 					velocity = dir.normalized() * -forwards_backwards * max_speed * ARVRServer.world_scale
 					#velocity = velocity.linear_interpolate(dir, delta * 100.0)
